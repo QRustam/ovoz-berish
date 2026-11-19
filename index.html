@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ovoz berish</title>
+<style>
+:root{--bg:#f5f6fa;--card:#fff;--tx:#1b1f2a;--mut:#667085;--ac:#2f6fed;--bar:#d9e5ff;--bd:#e2e5ee;--ok:#1a8f4c}
+@media (prefers-color-scheme:dark){:root{--bg:#12141a;--card:#1c1f28;--tx:#f0f2f7;--mut:#9aa3b5;--ac:#6b9bff;--bar:#27375e;--bd:#2c3140;--ok:#4cc585}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:18px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:20px 16px 48px}
+.q{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:22px 18px;font-size:clamp(22px,6vw,32px);font-weight:700;line-height:1.25;margin-bottom:14px}
+.opt{position:relative;display:block;width:100%;text-align:left;background:var(--card);color:var(--tx);border:2px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:10px;font:inherit;font-size:clamp(18px,4.5vw,24px);cursor:pointer;overflow:hidden}
+.opt:disabled{cursor:default}
+.fill{position:absolute;inset:0 auto 0 0;background:var(--bar);width:0;transition:width .3s}
+.row{position:relative;display:flex;justify-content:space-between;gap:12px}
+.opt.mine{border-color:var(--ac)}
+.opt.mine .lab::before{content:"✓ ";color:var(--ok);font-weight:700}
+.note{color:var(--mut);font-size:16px;margin-top:8px}
+.msg{color:var(--mut);padding:40px 4px;text-align:center}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <div id="wait" class="msg">Boshlovchi savolni qoʻyishini kuting…</div>
+  <section id="poll" hidden>
+    <div class="q" id="question"></div>
+    <div id="options"></div>
+    <div class="note" id="note"></div>
+  </section>
+</main>
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  var id;
+  try{id=localStorage.getItem("voter");if(!id){id=Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem("voter",id)}}
+  catch(e){id=Math.random().toString(36).slice(2)+Date.now().toString(36)}
+  var st=null;
+
+  function render(){
+    if(!st||!st.q){$("wait").hidden=false;$("poll").hidden=true;return}
+    $("wait").hidden=true;$("poll").hidden=false;
+    $("question").textContent=st.q;
+    var w=$("options");w.textContent="";
+    st.options.forEach(function(t,i){
+      var b=document.createElement("button");
+      b.className="opt"+(st.mine===i?" mine":"");
+      b.disabled=!st.open;
+      var f=document.createElement("div");f.className="fill";
+      var r=document.createElement("div");r.className="row";
+      var l=document.createElement("span");l.className="lab";l.textContent=t;
+      r.appendChild(l);
+      if(st.counts){
+        var p=st.total?Math.round(st.counts[i]/st.total*100):0;
+        f.style.width=p+"%";
+        var c=document.createElement("span");c.textContent=st.counts[i]+" ("+p+"%)";r.appendChild(c);
+      }
+      b.appendChild(f);b.appendChild(r);
+      b.addEventListener("click",function(){vote(i)});
+      w.appendChild(b);
+    });
+    $("note").textContent=!st.open?"Ovoz berish yopilgan."
+      :st.mine!==null?"Ovozingiz qabul qilindi. Xohlasangiz, boshqa variantni bosib oʻzgartirishingiz mumkin.":"Variantni bosing.";
+  }
+  function vote(i){
+    if(!st||!st.open)return;
+    st.mine=i;render();
+    fetch("/api/vote",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id,choice:i})})
+      .catch(function(){$("note").textContent="Ulanishda xatolik. Qayta urinib koʻring."});
+  }
+  var es=new EventSource("/api/stream?id="+encodeURIComponent(id));
+  es.onmessage=function(e){try{st=JSON.parse(e.data);render()}catch(x){}};
+})();
+</script>
+</body>
+</html>

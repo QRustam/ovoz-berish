@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boshlovchi — Ovoz berish</title>
+<style>
+:root{--bg:#f5f6fa;--card:#fff;--tx:#1b1f2a;--mut:#667085;--ac:#2f6fed;--bar:#d9e5ff;--bd:#e2e5ee}
+@media (prefers-color-scheme:dark){:root{--bg:#12141a;--card:#1c1f28;--tx:#f0f2f7;--mut:#9aa3b5;--ac:#6b9bff;--bar:#27375e;--bd:#2c3140}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:18px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+.join{color:var(--mut);font-size:16px;margin-bottom:10px}
+.join b{color:var(--tx)}
+.q{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:26px 22px;font-size:clamp(26px,5vw,46px);font-weight:700;line-height:1.25;margin-bottom:16px}
+.opt{position:relative;background:var(--card);border:2px solid var(--bd);border-radius:14px;padding:18px;margin-bottom:10px;font-size:clamp(20px,4vw,32px);overflow:hidden}
+.fill{position:absolute;inset:0 auto 0 0;background:var(--bar);width:0;transition:width .4s}
+.row{position:relative;display:flex;justify-content:space-between;gap:12px}
+.stat{color:var(--mut);font-size:17px;margin:8px 2px}
+.panel{margin-top:24px;background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
+.panel h2{margin:0 0 6px;font-size:18px}
+label{display:block;font-size:14px;color:var(--mut);margin:10px 0 4px}
+input,textarea{width:100%;font:inherit;font-size:17px;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:10px}
+textarea{min-height:120px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.btn{font:inherit;font-size:15px;padding:10px 14px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer}
+.btn.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+.err{color:#d33;font-size:15px;margin-top:8px}
+.login{max-width:360px;margin:12vh auto 0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="login">
+    <h2>Boshlovchi kirishi</h2>
+    <label for="pw">Parol</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <div class="bar"><button class="btn pri" id="enter">Kirish</button></div>
+    <div class="err" id="lerr"></div>
+  </section>
+
+  <section id="app" hidden>
+    <div class="join">Ishtirokchilar bu manzilni ochadi: <b id="url"></b></div>
+    <div class="q" id="question"></div>
+    <div id="options"></div>
+    <div class="stat" id="stat"></div>
+
+    <div class="panel">
+      <h2>Boshqaruv</h2>
+      <label for="qin">Savol</label>
+      <input id="qin" placeholder="Savolni yozing">
+      <label for="oin">Variantlar (har biri alohida qatorda, 2–9 ta)</label>
+      <textarea id="oin" placeholder="Ha&#10;Yoʻq&#10;Bilmayman"></textarea>
+      <div class="bar">
+        <button class="btn pri" id="save">Yangi ovoz berishni boshlash</button>
+        <button class="btn" id="open">Ovozni yopish</button>
+        <button class="btn" id="show">Natijani ishtirokchilarga koʻrsatish</button>
+        <button class="btn" id="reset">Ovozlarni tozalash</button>
+      </div>
+      <div class="err" id="aerr"></div>
+    </div>
+  </section>
+</main>
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  var pw=null,st=null,filled=false;
+  $("url").textContent=location.origin;
+
+  function api(body){
+    return fetch("/api/host",{method:"POST",headers:{"Content-Type":"application/json","x-host":pw},body:JSON.stringify(body)})
+      .then(function(r){if(!r.ok)throw 0;return r.json()});
+  }
+  function render(){
+    if(!st)return;
+    $("question").textContent=st.q||"Savol hali qoʻyilmagan";
+    var w=$("options");w.textContent="";
+    (st.options||[]).forEach(function(t,i){
+      var d=document.createElement("div");d.className="opt";
+      var p=st.total?Math.round(st.counts[i]/st.total*100):0;
+      var f=document.createElement("div");f.className="fill";f.style.width=p+"%";
+      var r=document.createElement("div");r.className="row";
+      var l=document.createElement("span");l.textContent=(i+1)+". "+t;
+      var c=document.createElement("span");c.textContent=st.counts[i]+" ("+p+"%)";
+      r.appendChild(l);r.appendChild(c);d.appendChild(f);d.appendChild(r);w.appendChild(d);
+    });
+    $("stat").textContent="Ovoz berganlar: "+st.total+" · Hozir ulangan ishtirokchilar: "+st.online+
+      (st.q?(st.open?" · Ovoz berish ochiq":" · Ovoz berish yopilgan"):"");
+    $("open").textContent=st.open?"Ovozni yopish":"Ovozni ochish";
+    $("show").textContent=st.show?"Natijani ishtirokchilardan yashirish":"Natijani ishtirokchilarga koʻrsatish";
+    if(!filled&&st.q){$("qin").value=st.q;$("oin").value=st.options.join("\n");filled=true}
+  }
+  function connect(){
+    var es=new EventSource("/api/stream?host="+encodeURIComponent(pw));
+    es.onmessage=function(e){try{st=JSON.parse(e.data);render()}catch(x){}};
+  }
+  function enter(){
+    var p=$("pw").value;
+    fetch("/api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pw:p})})
+      .then(function(r){if(!r.ok)throw 0;pw=p;try{sessionStorage.setItem("hpw",p)}catch(e){}
+        $("login").hidden=true;$("app").hidden=false;connect()})
+      .catch(function(){$("lerr").textContent="Parol notoʻgʻri."});
+  }
+  $("enter").addEventListener("click",enter);
+  $("pw").addEventListener("keydown",function(e){if(e.key==="Enter")enter()});
+  try{var s=sessionStorage.getItem("hpw");if(s){$("pw").value=s;enter()}}catch(e){}
+
+  $("save").addEventListener("click",function(){
+    var q=$("qin").value.trim();
+    var o=$("oin").value.split("\n").map(function(s){return s.trim()}).filter(Boolean);
+    if(!q||o.length<2){$("aerr").textContent="Savol va kamida 2 ta variant kiriting.";return}
+    $("aerr").textContent="";
+    api({action:"set",q:q,options:o}).catch(function(){$("aerr").textContent="Saqlanmadi."});
+  });
+  $("open").addEventListener("click",function(){if(st)api({action:"open",value:!st.open})});
+  $("show").addEventListener("click",function(){if(st)api({action:"show",value:!st.show})});
+  $("reset").addEventListener("click",function(){if(confirm("Barcha ovozlar oʻchirilsinmi?"))api({action:"reset"})});
+})();
+</script>
+</body>
+</html>
